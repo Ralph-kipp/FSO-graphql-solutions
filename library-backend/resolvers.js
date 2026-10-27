@@ -1,5 +1,15 @@
+const { GraphQLError } = require("graphql")
 const Author = require("./models/author")
 const Book = require("./models/book")
+
+const badInput = (message, invalidArgs, error) =>
+  new GraphQLError(message, {
+    extensions: {
+      code: "BAD_USER_INPUT",
+      invalidArgs,
+      ...(error && { error: error.message }),
+    },
+  })
 
 const resolvers = {
   Query: {
@@ -26,21 +36,41 @@ const resolvers = {
   },
   Mutation: {
     addBook: async (root, args) => {
-      let author = await Author.findOne({ name: args.author })
-      if (!author) {
-        author = new Author({ name: args.author })
-        await author.save()
+      if (await Book.exists({ title: args.title })) {
+        throw badInput(`Title must be unique: ${args.title}`, args.title)
       }
 
-      const book = new Book({
-        title: args.title,
-        published: args.published,
-        author: author._id,
-        genres: args.genres,
-      })
-      await book.save()
+      const invalidArgs = [args.title, args.author]
 
-      return book.populate("author")
+      try {
+        let author = await Author.findOne({ name: args.author })
+        const isNewAuthor = !author
+        if (isNewAuthor) {
+          author = new Author({ name: args.author })
+        }
+
+        const book = new Book({
+          title: args.title,
+          published: args.published,
+          author: author._id,
+          genres: args.genres,
+        })
+
+        // validate everything first, so an invalid book leaves nothing behind
+        if (isNewAuthor) {
+          await author.validate()
+        }
+        await book.validate()
+
+        if (isNewAuthor) {
+          await author.save()
+        }
+        await book.save()
+
+        return book.populate("author")
+      } catch (error) {
+        throw badInput(`Saving book failed: ${error.message}`, invalidArgs, error)
+      }
     },
     editAuthor: async (root, args) => {
       const author = await Author.findOne({ name: args.name })
@@ -49,7 +79,11 @@ const resolvers = {
       }
 
       author.born = args.setBornTo
-      return author.save()
+      try {
+        return await author.save()
+      } catch (error) {
+        throw badInput(`Saving author failed: ${error.message}`, args.name, error)
+      }
     },
   },
   Author: {
