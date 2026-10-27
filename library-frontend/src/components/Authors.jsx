@@ -34,7 +34,9 @@ const Authors = (props) => {
           ))}
         </tbody>
       </table>
-      <BirthYearForm authors={authors} setError={props.setError} />
+      {props.loggedIn && (
+        <BirthYearForm authors={authors} setError={props.setError} />
+      )}
     </div>
   )
 }
