@@ -1,6 +1,16 @@
 const { GraphQLError } = require("graphql")
+const jwt = require("jsonwebtoken")
 const Author = require("./models/author")
 const Book = require("./models/book")
+const User = require("./models/user")
+
+const requireLogin = (context) => {
+  if (!context?.currentUser) {
+    throw new GraphQLError("not authenticated", {
+      extensions: { code: "UNAUTHENTICATED" },
+    })
+  }
+}
 
 const badInput = (message, invalidArgs, error) =>
   new GraphQLError(message, {
@@ -33,9 +43,12 @@ const resolvers = {
       return Book.find(filter).populate("author")
     },
     allAuthors: async () => Author.find({}),
+    me: (root, args, context) => context?.currentUser ?? null,
   },
   Mutation: {
-    addBook: async (root, args) => {
+    addBook: async (root, args, context) => {
+      requireLogin(context)
+
       if (await Book.exists({ title: args.title })) {
         throw badInput(`Title must be unique: ${args.title}`, args.title)
       }
@@ -72,7 +85,9 @@ const resolvers = {
         throw badInput(`Saving book failed: ${error.message}`, invalidArgs, error)
       }
     },
-    editAuthor: async (root, args) => {
+    editAuthor: async (root, args, context) => {
+      requireLogin(context)
+
       const author = await Author.findOne({ name: args.name })
       if (!author) {
         return null
@@ -84,6 +99,38 @@ const resolvers = {
       } catch (error) {
         throw badInput(`Saving author failed: ${error.message}`, args.name, error)
       }
+    },
+    createUser: async (root, args) => {
+      if (await User.exists({ username: args.username })) {
+        throw badInput(`Username must be unique: ${args.username}`, args.username)
+      }
+
+      const user = new User({
+        username: args.username,
+        favoriteGenre: args.favoriteGenre,
+      })
+
+      try {
+        await user.validate()
+        return await user.save()
+      } catch (error) {
+        throw badInput(
+          `Creating the user failed: ${error.message}`,
+          args.username,
+          error,
+        )
+      }
+    },
+    login: async (root, args) => {
+      const user = await User.findOne({ username: args.username })
+
+      if (!user || args.password !== "secret") {
+        throw badInput("wrong credentials", args.username)
+      }
+
+      const userForToken = { username: user.username, id: user._id }
+
+      return { value: jwt.sign(userForToken, process.env.JWT_SECRET) }
     },
   },
   Author: {
