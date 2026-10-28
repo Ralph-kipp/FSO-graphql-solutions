@@ -11,6 +11,11 @@ const NewBook = (props) => {
 
   const [addBook] = useMutation(ADD_BOOK, {
     refetchQueries: [{ query: ALL_BOOKS }, { query: ALL_AUTHORS }],
+    // allBooks is cached once per genre variable, so drop every cached result
+    update: (cache) => {
+      cache.evict({ fieldName: 'allBooks' })
+      cache.gc()
+    },
     onError: (error) => props.setError(error.message),
   })
 
