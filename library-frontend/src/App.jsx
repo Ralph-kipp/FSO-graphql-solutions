@@ -5,6 +5,7 @@ import Books from './components/Books'
 import LoginForm from './components/LoginForm'
 import NewBook from './components/NewBook'
 import Notify from './components/Notify'
+import Recommend from './components/Recommend'
 
 const App = () => {
   const [page, setPage] = useState('authors')
@@ -26,9 +27,12 @@ const App = () => {
     setPage('authors')
   }
 
-  // the add book view is only reachable while logged in, login only while logged out
+  // the add book and recommend views are only reachable while logged in, login only while logged out
   let currentPage = page
   if (page === 'add' && !token) {
+    currentPage = 'authors'
+  }
+  if (page === 'recommend' && !token) {
     currentPage = 'authors'
   }
   if (page === 'login' && token) {
@@ -43,6 +47,7 @@ const App = () => {
         {token ? (
           <>
             <button onClick={() => setPage('add')}>add book</button>
+            <button onClick={() => setPage('recommend')}>recommend</button>
             <button onClick={logout}>logout</button>
           </>
         ) : (
@@ -61,6 +66,8 @@ const App = () => {
       <Books show={currentPage === 'books'} />
 
       <NewBook show={currentPage === 'add'} setError={notify} />
+
+      <Recommend show={currentPage === 'recommend'} token={token} />
 
       <LoginForm
         show={currentPage === 'login'}

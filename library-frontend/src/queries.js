@@ -60,6 +60,16 @@ export const EDIT_AUTHOR = gql`
   }
 `
 
+export const ME = gql`
+  query me {
+    me {
+      username
+      favoriteGenre
+      id
+    }
+  }
+`
+
 export const LOGIN = gql`
   mutation login($username: String!, $password: String!) {
     login(username: $username, password: $password) {
