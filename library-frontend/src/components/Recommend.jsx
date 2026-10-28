@@ -3,21 +3,21 @@ import { ALL_BOOKS, ME } from '../queries'
 
 const Recommend = (props) => {
   const me = useQuery(ME, { skip: !props.token })
-  const books = useQuery(ALL_BOOKS)
+  const favoriteGenre = me.data?.me?.favoriteGenre
+  const books = useQuery(ALL_BOOKS, {
+    variables: { genre: favoriteGenre },
+    skip: !favoriteGenre,
+  })
 
   if (!props.show) {
     return null
   }
 
-  if (me.loading || books.loading || !me.data?.me || !books.data) {
+  if (me.loading || books.loading || !favoriteGenre || !books.data) {
     return <div>loading...</div>
   }
 
-  const favoriteGenre = me.data.me.favoriteGenre
-
-  const booksToShow = books.data.allBooks.filter((b) =>
-    b.genres.includes(favoriteGenre)
-  )
+  const booksToShow = books.data.allBooks
 
   return (
     <div>
