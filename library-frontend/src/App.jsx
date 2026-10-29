@@ -1,16 +1,19 @@
 import { useState } from 'react'
-import { useApolloClient } from '@apollo/client/react'
+import { useApolloClient, useSubscription } from '@apollo/client/react'
 import Authors from './components/Authors'
 import Books from './components/Books'
 import LoginForm from './components/LoginForm'
 import NewBook from './components/NewBook'
 import Notify from './components/Notify'
 import Recommend from './components/Recommend'
+import { BOOK_ADDED } from './queries'
+import { addBookToCache } from './utils/apolloCache'
 
 const App = () => {
   const [page, setPage] = useState('authors')
   const [token, setToken] = useState(localStorage.getItem('library-user-token'))
   const [errorMessage, setErrorMessage] = useState(null)
+  const [infoMessage, setInfoMessage] = useState(null)
   const client = useApolloClient()
 
   const notify = (message) => {
@@ -19,6 +22,21 @@ const App = () => {
       setErrorMessage(null)
     }, 10000)
   }
+
+  // generic text on purpose: the title is already shown in the book lists
+  const notifyInfo = (message) => {
+    setInfoMessage(message)
+    setTimeout(() => {
+      setInfoMessage(null)
+    }, 10000)
+  }
+
+  useSubscription(BOOK_ADDED, {
+    onData: ({ client, data }) => {
+      addBookToCache(client.cache, data.data.bookAdded)
+      notifyInfo('a new book was added')
+    },
+  })
 
   const logout = () => {
     setToken(null)
@@ -55,7 +73,7 @@ const App = () => {
         )}
       </div>
 
-      <Notify errorMessage={errorMessage} />
+      <Notify errorMessage={errorMessage} infoMessage={infoMessage} />
 
       <Authors
         show={currentPage === 'authors'}

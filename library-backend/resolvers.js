@@ -1,10 +1,13 @@
 const { GraphQLError } = require("graphql")
+const { PubSub } = require("graphql-subscriptions")
 const jwt = require("jsonwebtoken")
 const Author = require("./models/author")
 const Book = require("./models/book")
 const User = require("./models/user")
 
-const requireLogin = (context) => {
+const pubsub = new PubSub()
+
+const requireLogin =(context) => {
   if (!context?.currentUser) {
     throw new GraphQLError("not authenticated", {
       extensions: { code: "UNAUTHENTICATED" },
@@ -42,7 +45,19 @@ const resolvers = {
 
       return Book.find(filter).populate("author")
     },
-    allAuthors: async () => Author.find({}),
+    allAuthors: async () => {
+      // one query for the authors and one for all counts, instead of one count per author
+      const [authors, counts] = await Promise.all([
+        Author.find({}),
+        Book.aggregate([{ $group: { _id: "$author", count: { $sum: 1 } } }]),
+      ])
+      const countByAuthor = new Map(counts.map((c) => [String(c._id), c.count]))
+
+      authors.forEach((author) => {
+        author.bookCount = countByAuthor.get(String(author._id)) ?? 0
+      })
+      return authors
+    },
     me: (root, args, context) => context?.currentUser ?? null,
   },
   Mutation: {
@@ -80,7 +95,10 @@ const resolvers = {
         }
         await book.save()
 
-        return book.populate("author")
+        const savedBook = await book.populate("author")
+        pubsub.publish("BOOK_ADDED", { bookAdded: savedBook })
+
+        return savedBook
       } catch (error) {
         throw badInput(`Saving book failed: ${error.message}`, invalidArgs, error)
       }
@@ -143,8 +161,16 @@ const resolvers = {
       return true
     },
   },
+  Subscription: {
+    bookAdded: {
+      subscribe: () => pubsub.asyncIterableIterator("BOOK_ADDED"),
+    },
+  },
   Author: {
-    bookCount: async (root) => Book.countDocuments({ author: root._id }),
+    bookCount: async (root) =>
+      typeof root.bookCount === "number"
+        ? root.bookCount
+        : Book.countDocuments({ author: root._id }),
   },
 }
 
